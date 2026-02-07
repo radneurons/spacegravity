@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LEGO Studio 3D</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: rgba(16, 20, 28, 0.92);
+      --panel-solid: #131824;
+      --accent: #6cf0ff;
+      --accent-2: #ffd36c;
+      --text: #e9f2ff;
+      --muted: #96a0b3;
+      --good: #7dff9b;
+      --danger: #ff7d95;
+      --shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; font-family: "Inter", "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+    #app { display: flex; width: 100%; height: 100%; position: relative; }
+    #viewport { flex: 1; position: relative; }
+    canvas { display: block; }
+    #panel {
+      width: 320px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border-left: 1px solid rgba(255,255,255,0.08);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 14px;
+      transition: transform 0.3s ease;
+    }
+    #panel.collapsed { transform: translateX(100%); }
+    #panelToggle {
+      position: absolute;
+      right: 330px;
+      top: 16px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(20,24,34,0.9);
+      color: var(--text);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      z-index: 20;
+    }
+    #panelToggle span { display: inline-block; transform: rotate(0deg); transition: transform 0.3s ease; }
+    #panel.collapsed + #panelToggle span { transform: rotate(180deg); }
+    .section { background: rgba(12, 16, 24, 0.6); padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); }
+    .section h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      background: #1b2232;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: 0.2s ease;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: rgba(108,240,255,0.2); border-color: var(--accent); color: var(--accent); }
+    .color-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.2);
+      cursor: pointer;
+      position: relative;
+    }
+    .color-swatch.selected::after {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 8px;
+      border: 2px solid var(--accent-2);
+      box-shadow: 0 0 10px rgba(255,211,108,0.4);
+    }
+    #palette { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 230px; overflow: auto; }
+    .part-card {
+      padding: 8px;
+      background: #161c2b;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      cursor: grab;
+      transition: 0.2s ease;
+      font-size: 12px;
+    }
+    .part-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .part-card.active { border-color: var(--accent-2); color: var(--accent-2); }
+    #hud {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      background: rgba(16, 20, 28, 0.8);
+      border-radius: 12px;
+      padding: 10px 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 10;
+      max-width: 240px;
+    }
+    #hud strong { color: var(--accent); }
+    #selectionRect {
+      position: absolute;
+      border: 1px dashed var(--accent-2);
+      background: rgba(255,211,108,0.1);
+      pointer-events: none;
+      z-index: 12;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    #jsonModal {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6,8,12,0.7);
+      z-index: 40;
+    }
+    #jsonModal.active { display: flex; }
+    #jsonModal .modal {
+      width: min(680px, 90vw);
+      background: var(--panel-solid);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    textarea {
+      width: 100%;
+      min-height: 240px;
+      background: #0d111a;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+    }
+    #templateGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .template-card { background: #151c2b; border-radius: 10px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 12px; }
+    .template-card:hover { border-color: var(--accent); color: var(--accent); }
+    #projectList { display: flex; flex-direction: column; gap: 8px; max-height: 140px; overflow: auto; }
+    .project-item { display: flex; align-items: center; gap: 8px; padding: 6px; background: #141a28; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; }
+    .project-item img { width: 48px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+    .project-item:hover { border-color: var(--accent); }
+    #toast {
+      position: absolute;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      background: rgba(15,20,30,0.9);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="viewport"></div>
+    <div id="panel">
+      <div class="section">
+        <h3>Studio</h3>
+        <div class="row">
+          <button class="btn" id="undoBtn">Undo</button>
+          <button class="btn" id="redoBtn">Redo</button>
+          <button class="btn" id="clearBtn">Clear</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="gridToggle">Grid Snap</button>
+          <button class="btn" id="angleToggle">Angle Snap</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="jsonBtn">JSON</button>
+          <button class="btn" id="saveBtn">Save</button>
+          <button class="btn" id="loadBtn">Load</button>
+        </div>
+      </div>
+      <div class="section">
+        <h3>Baseplate</h3>
+        <div class="row">
+          <button class="btn baseplate" data-size="16">16x16</button>
+          <button class="btn baseplate" data-size="32">32x32</button>
+          <button class="btn baseplate" data-size="48">48x48</button>
+        </div>
+      </div>
+      <div class="section">
+        <h3>Parts Library</h3>
+        <div id="palette"></div>
+      </div>
+      <div class="section">
+        <h3>Colors</h3>
+        <div class="row" id="colors"></div>
+      </div>
+      <div class="section">
+        <h3>Templates</h3>
+        <div id="templateGrid"></div>
+      </div>
+      <div class="section">
+        <h3>Projects</h3>
+        <div id="projectList"></div>
+      </div>
+    </div>
+    <button id="panelToggle" aria-label="Toggle panel"><span>❯</span></button>
+    <div id="hud">
+      <div><strong>LEGO Studio</strong></div>
+      <div>Click to place · Drag from palette for ghost</div>
+      <div>Q/E rotate · Shift + drag multi-select</div>
+      <div>Right-drag rotate piece · Delete removes</div>
+    </div>
+    <div id="selectionRect"></div>
+    <div id="overlay"></div>
+    <div id="toast"></div>
+    <div id="jsonModal">
+      <div class="modal">
+        <h3>JSON Import / Export</h3>
+        <textarea id="jsonText"></textarea>
+        <div class="row" style="margin-top:10px; justify-content:flex-end;">
+          <button class="btn" id="importJson">Import</button>
+          <button class="btn" id="exportJson">Export</button>
+          <button class="btn" id="closeJson">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+    const viewport = document.getElementById("viewport");
+    const paletteEl = document.getElementById("palette");
+    const colorsEl = document.getElementById("colors");
+    const templateGrid = document.getElementById("templateGrid");
+    const projectList = document.getElementById("projectList");
+    const selectionRectEl = document.getElementById("selectionRect");
+    const toastEl = document.getElementById("toast");
+    const jsonModal = document.getElementById("jsonModal");
+    const jsonText = document.getElementById("jsonText");
+    selectionRectEl.style.display = "none";
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    viewport.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0f14);
+
+    const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 500);
+    camera.position.set(18, 16, 22);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minDistance = 8;
+    controls.maxDistance = 120;
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x1b2232, 0.7);
+    scene.add(hemi);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    keyLight.position.set(20, 40, 10);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 120;
+    keyLight.shadow.camera.left = -60;
+    keyLight.shadow.camera.right = 60;
+    keyLight.shadow.camera.top = 60;
+    keyLight.shadow.camera.bottom = -60;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x8ecbff, 0.4);
+    fillLight.position.set(-30, 20, -20);
+    scene.add(fillLight);
+
+    const studRadius = 0.23;
+    const studHeight = 0.12;
+    const plateHeight = 0.32;
+    const brickHeight = plateHeight * 3;
+    const studSpacing = 1;
+
+    const gridGroup = new THREE.Group();
+    scene.add(gridGroup);
+
+    const partsLibrary = [];
+    const sizes = [1,2,3,4,6,8,10,12,16];
+    sizes.forEach(w => {
+      sizes.forEach(d => {
+        if (w <= 16 && d <= 16) {
+          partsLibrary.push({ id: `brick-${w}x${d}`, name: `Brick ${w}x${d}`, type: "brick", w, d, h: brickHeight, studs: true, tubes: true });
+          partsLibrary.push({ id: `plate-${w}x${d}`, name: `Plate ${w}x${d}`, type: "plate", w, d, h: plateHeight, studs: true, tubes: true });
+          partsLibrary.push({ id: `tile-${w}x${d}`, name: `Tile ${w}x${d}`, type: "tile", w, d, h: plateHeight, studs: false, tubes: false });
+        }
+      });
+    });
+    partsLibrary.push(
+      { id: "slope-2x2", name: "Slope 2x2", type: "slope", w: 2, d: 2, h: brickHeight, studs: true, tubes: true },
+      { id: "slope-2x4", name: "Slope 2x4", type: "slope", w: 2, d: 4, h: brickHeight, studs: true, tubes: true },
+      { id: "technic-1x4", name: "Technic 1x4", type: "technic", w: 1, d: 4, h: brickHeight, studs: true, tubes: true },
+      { id: "technic-2x4", name: "Technic 2x4", type: "technic", w: 2, d: 4, h: brickHeight, studs: true, tubes: true },
+      { id: "minifig-head", name: "Minifig Head", type: "minifig", w: 1, d: 1, h: brickHeight * 0.9, studs: true, tubes: false },
+      { id: "minifig-torso", name: "Minifig Torso", type: "minifig", w: 2, d: 1, h: brickHeight * 1.3, studs: false, tubes: true },
+      { id: "minifig-legs", name: "Minifig Legs", type: "minifig", w: 2, d: 1, h: brickHeight * 1.2, studs: false, tubes: true }
+    );
+
+    const legoColors = [
+      { name: "Bright Red", hex: 0xff2a2a },
+      { name: "Bright Blue", hex: 0x2a6cff },
+      { name: "Bright Yellow", hex: 0xffd82a },
+      { name: "Bright Green", hex: 0x2aff7a },
+      { name: "Orange", hex: 0xff7a2a },
+      { name: "Lavender", hex: 0xb48cff },
+      { name: "Dark Green", hex: 0x165c3a },
+      { name: "Dark Blue", hex: 0x142953 },
+      { name: "Dark Bluish Gray", hex: 0x4b5563 },
+      { name: "Light Bluish Gray", hex: 0xcbd5e1 },
+      { name: "Black", hex: 0x111216 },
+      { name: "White", hex: 0xf8fafc },
+      { name: "Sand Tan", hex: 0xd6b681 },
+      { name: "Tan", hex: 0xd9c29e },
+      { name: "Dark Tan", hex: 0x8f6f45 },
+      { name: "Bright Pink", hex: 0xff5aa5 },
+      { name: "Purple", hex: 0x6d3cff },
+      { name: "Teal", hex: 0x32c7c7 },
+      { name: "Olive", hex: 0x6c7a2a },
+      { name: "Brown", hex: 0x6b3b1d },
+      { name: "Transparent Blue", hex: 0x65c6ff },
+      { name: "Pearl Gold", hex: 0xd9b45a }
+    ];
+
+    const state = {
+      baseplateSize: 32,
+      gridSnap: true,
+      angleSnap: true,
+      selectedPart: partsLibrary[0].id,
+      selectedColor: legoColors[0].hex,
+      bricks: [],
+      selectedBricks: new Set(),
+      ghost: null,
+      dragPalette: false,
+      placementRotation: 0,
+      undoStack: [],
+      redoStack: [],
+      rightDragging: false,
+      selectionBox: null,
+      clipboard: null
+    };
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playClickSound(frequency = 420) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = frequency;
+      gain.gain.value = 0.08;
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+      osc.stop(audioCtx.currentTime + 0.16);
+    }
+
+    function vibrate(ms = 10) {
+      if (navigator.vibrate) navigator.vibrate(ms);
+    }
+
+    function showToast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toastEl.classList.remove("show"), 1600);
+    }
+
+    function makeMaterial(colorHex, ghost = false) {
+      return new THREE.MeshStandardMaterial({
+        color: colorHex,
+        roughness: ghost ? 0.9 : 0.35,
+        metalness: 0.1,
+        clearcoat: ghost ? 0 : 1,
+        clearcoatRoughness: 0.25,
+        transparent: ghost,
+        opacity: ghost ? 0.5 : 1
+      });
+    }
+
+    function createStudGeometry() {
+      return new THREE.CylinderGeometry(studRadius, studRadius, studHeight, 32);
+    }
+
+    const studGeometry = createStudGeometry();
+
+    function createBrickMesh(part, colorHex) {
+      const group = new THREE.Group();
+      const bodyGeometry = new THREE.BoxGeometry(part.w, part.h, part.d);
+      const material = makeMaterial(colorHex);
+      const body = new THREE.Mesh(bodyGeometry, material);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      body.position.y = part.h / 2;
+      group.add(body);
+
+      if (part.studs) {
+        for (let x = 0; x < part.w; x++) {
+          for (let z = 0; z < part.d; z++) {
+            const stud = new THREE.Mesh(studGeometry, material);
+            stud.castShadow = true;
+            stud.position.set(
+              -part.w / 2 + 0.5 + x,
+              part.h + studHeight / 2,
+              -part.d / 2 + 0.5 + z
+            );
+            group.add(stud);
+          }
+        }
+      }
+
+      if (part.type === "slope") {
+        const rampGeom = new THREE.BoxGeometry(part.w, part.h * 0.6, part.d);
+        const ramp = new THREE.Mesh(rampGeom, material);
+        ramp.position.set(0, part.h * 0.7, 0);
+        ramp.scale.y = 0.6;
+        ramp.rotation.x = -Math.PI / 8;
+        ramp.castShadow = true;
+        group.add(ramp);
+      }
+
+      if (part.type === "technic") {
+        const holeGeometry = new THREE.CylinderGeometry(0.18, 0.18, part.w + 0.2, 24);
+        for (let i = 0; i < part.d; i++) {
+          const hole = new THREE.Mesh(holeGeometry, new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 }));
+          hole.rotation.z = Math.PI / 2;
+          hole.position.set(0, part.h / 2, -part.d / 2 + 0.5 + i);
+          group.add(hole);
+        }
+      }
+
+      if (part.id === "minifig-head") {
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, part.h, 32), material);
+        head.position.y = part.h / 2;
+        head.castShadow = true;
+        group.clear();
+        group.add(head);
+        const stud = new THREE.Mesh(studGeometry, material);
+        stud.position.set(0, part.h + studHeight / 2, 0);
+        group.add(stud);
+      }
+
+      if (part.id === "minifig-torso") {
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(part.w, part.h, part.d), material);
+        torso.position.y = part.h / 2;
+        torso.castShadow = true;
+        group.clear();
+        group.add(torso);
+      }
+
+      if (part.id === "minifig-legs") {
+        const legs = new THREE.Mesh(new THREE.BoxGeometry(part.w, part.h, part.d), material);
+        legs.position.y = part.h / 2;
+        legs.castShadow = true;
+        group.clear();
+        group.add(legs);
+      }
+
+      return group;
+    }
+
+    function createBaseplate(size) {
+      gridGroup.clear();
+      const baseGeometry = new THREE.BoxGeometry(size, plateHeight, size);
+      const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x1a6b3b, roughness: 0.6, metalness: 0.1 });
+      const base = new THREE.Mesh(baseGeometry, baseMaterial);
+      base.receiveShadow = true;
+      base.position.y = plateHeight / 2;
+      base.name = "baseplate";
+      gridGroup.add(base);
+
+      for (let x = 0; x < size; x++) {
+        for (let z = 0; z < size; z++) {
+          const stud = new THREE.Mesh(studGeometry, baseMaterial);
+          stud.position.set(-size / 2 + 0.5 + x, plateHeight + studHeight / 2, -size / 2 + 0.5 + z);
+          stud.receiveShadow = true;
+          gridGroup.add(stud);
+        }
+      }
+
+      const gridHelper = new THREE.GridHelper(size, size, 0x29324a, 0x1e2536);
+      gridHelper.position.y = plateHeight + 0.01;
+      gridHelper.visible = state.gridSnap;
+      gridHelper.name = "grid";
+      gridGroup.add(gridHelper);
+    }
+
+    function setGridVisible(visible) {
+      const grid = gridGroup.getObjectByName("grid");
+      if (grid) grid.visible = visible;
+    }
+
+    createBaseplate(state.baseplateSize);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function updatePointer(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function getPlacementPoint(event) {
+      updatePointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const hit = intersects.find(hit => hit.object.parent?.name === "brick" || hit.object.name === "baseplate");
+      if (hit) {
+        if (hit.object.parent?.name === "brick") {
+          const brick = hit.object.parent.userData;
+          const entry = state.bricks.find(b => b.id === brick.id);
+          if (entry) {
+            const part = getPartById(entry.partId);
+            return new THREE.Vector3(hit.point.x, entry.position.y + part.h, hit.point.z);
+          }
+        }
+        return new THREE.Vector3(hit.point.x, plateHeight, hit.point.z);
+      }
+      const planeY = new THREE.Plane(new THREE.Vector3(0, 1, 0), -plateHeight);
+      const point = new THREE.Vector3();
+      raycaster.ray.intersectPlane(planeY, point);
+      return point;
+    }
+
+    function getPartById(id) {
+      return partsLibrary.find(part => part.id === id);
+    }
+
+    function roundToStud(value) {
+      return Math.round(value / studSpacing) * studSpacing;
+    }
+
+    function roundToPlate(value) {
+      return Math.round(value / plateHeight) * plateHeight;
+    }
+
+    function snapPosition(pos, part) {
+      let x = pos.x;
+      let z = pos.z;
+      if (state.gridSnap) {
+        x = roundToStud(x);
+        z = roundToStud(z);
+      }
+      let y = pos.y;
+      if (state.gridSnap) {
+        y = roundToPlate(y);
+      }
+      y = Math.max(plateHeight, y);
+      const offsetX = (part.w % 2 === 0) ? 0 : 0;
+      return new THREE.Vector3(x, y, z).add(new THREE.Vector3(offsetX, 0, 0));
+    }
+
+    function getStudPositions(part, position, rotation) {
+      const studs = [];
+      const angle = rotation % (Math.PI * 2);
+      const swapped = Math.abs(Math.round(angle / (Math.PI / 2)) % 2) === 1;
+      const w = swapped ? part.d : part.w;
+      const d = swapped ? part.w : part.d;
+      for (let x = 0; x < w; x++) {
+        for (let z = 0; z < d; z++) {
+          studs.push({
+            x: Math.round(position.x - w / 2 + 0.5 + x),
+            z: Math.round(position.z - d / 2 + 0.5 + z),
+            y: position.y + part.h
+          });
+        }
+      }
+      return studs;
+    }
+
+    function getFootprint(part, position, rotation) {
+      const angle = rotation % (Math.PI * 2);
+      const swapped = Math.abs(Math.round(angle / (Math.PI / 2)) % 2) === 1;
+      return {
+        w: swapped ? part.d : part.w,
+        d: swapped ? part.w : part.d,
+        y: position.y
+      };
+    }
+
+    function collisionCheck(part, position, rotation, ignoreId = null) {
+      const footprint = getFootprint(part, position, rotation);
+      const minX = position.x - footprint.w / 2;
+      const maxX = position.x + footprint.w / 2;
+      const minZ = position.z - footprint.d / 2;
+      const maxZ = position.z + footprint.d / 2;
+      const minY = position.y;
+      const maxY = position.y + part.h;
+      for (const brick of state.bricks) {
+        if (brick.id === ignoreId) continue;
+        const bPart = getPartById(brick.partId);
+        const bFoot = getFootprint(bPart, brick.position, brick.rotation);
+        const bMinX = brick.position.x - bFoot.w / 2;
+        const bMaxX = brick.position.x + bFoot.w / 2;
+        const bMinZ = brick.position.z - bFoot.d / 2;
+        const bMaxZ = brick.position.z + bFoot.d / 2;
+        const bMinY = brick.position.y;
+        const bMaxY = brick.position.y + bPart.h;
+        const overlapX = minX < bMaxX && maxX > bMinX;
+        const overlapZ = minZ < bMaxZ && maxZ > bMinZ;
+        const overlapY = minY < bMaxY && maxY > bMinY;
+        if (overlapX && overlapY && overlapZ) return true;
+      }
+      return false;
+    }
+
+    function studSupportCheck(part, position, rotation) {
+      if (position.y <= plateHeight || !part.tubes) return true;
+      const studsBelow = new Set();
+      for (const brick of state.bricks) {
+        const bPart = getPartById(brick.partId);
+        if (!bPart.studs) continue;
+        const studs = getStudPositions(bPart, brick.position, brick.rotation);
+        studs.forEach(stud => {
+          studsBelow.add(`${stud.x},${stud.z},${stud.y.toFixed(2)}`);
+        });
+      }
+      const candidateStuds = getStudPositions(part, position, rotation);
+      return candidateStuds.every(stud => studsBelow.has(`${stud.x},${stud.z},${(stud.y - part.h).toFixed(2)}`));
+    }
+
+    function addBrick(partId, color, position, rotation) {
+      const part = getPartById(partId);
+      const mesh = createBrickMesh(part, color);
+      mesh.name = "brick";
+      mesh.position.copy(position);
+      mesh.rotation.y = rotation;
+      mesh.userData = { id: crypto.randomUUID(), partId, color, rotation: rotation };
+      mesh.castShadow = true;
+      scene.add(mesh);
+      state.bricks.push({
+        id: mesh.userData.id,
+        partId,
+        color,
+        position: position.clone(),
+        rotation
+      });
+      animateDrop(mesh);
+      return mesh;
+    }
+
+    function animateDrop(mesh) {
+      mesh.scale.set(0.9, 0.9, 0.9);
+      const targetScale = new THREE.Vector3(1, 1, 1);
+      let t = 0;
+      const wobble = () => {
+        t += 0.08;
+        const factor = Math.sin(t) * 0.08;
+        mesh.scale.lerp(targetScale, 0.2);
+        mesh.rotation.x = factor;
+        mesh.rotation.z = -factor;
+        if (t < Math.PI) {
+          requestAnimationFrame(wobble);
+        } else {
+          mesh.rotation.x = 0;
+          mesh.rotation.z = 0;
+          mesh.scale.copy(targetScale);
+        }
+      };
+      wobble();
+    }
+
+    function poof(position) {
+      const particles = new THREE.BufferGeometry();
+      const count = 60;
+      const positions = new Float32Array(count * 3);
+      const velocities = [];
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = position.x;
+        positions[i * 3 + 1] = position.y + 0.3;
+        positions[i * 3 + 2] = position.z;
+        velocities.push(new THREE.Vector3(
+          (Math.random() - 0.5) * 0.6,
+          Math.random() * 0.6,
+          (Math.random() - 0.5) * 0.6
+        ));
+      }
+      particles.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({ color: 0xffd36c, size: 0.05, transparent: true, opacity: 0.9 });
+      const points = new THREE.Points(particles, material);
+      scene.add(points);
+      let life = 0;
+      const animate = () => {
+        life += 0.02;
+        const arr = particles.attributes.position.array;
+        for (let i = 0; i < count; i++) {
+          arr[i * 3] += velocities[i].x;
+          arr[i * 3 + 1] += velocities[i].y;
+          arr[i * 3 + 2] += velocities[i].z;
+          velocities[i].y -= 0.01;
+        }
+        particles.attributes.position.needsUpdate = true;
+        material.opacity = Math.max(0, 0.9 - life);
+        if (life < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          scene.remove(points);
+          particles.dispose();
+          material.dispose();
+        }
+      };
+      animate();
+    }
+
+    function removeBrick(id) {
+      const index = state.bricks.findIndex(b => b.id === id);
+      if (index === -1) return;
+      const brick = state.bricks[index];
+      const mesh = scene.children.find(child => child.userData?.id === id);
+      if (mesh) {
+        poof(mesh.position);
+        scene.remove(mesh);
+      }
+      state.bricks.splice(index, 1);
+    }
+
+    function syncSelectionHighlight() {
+      scene.traverse(obj => {
+        if (obj.name === "brick" && obj.userData?.id) {
+          const selected = state.selectedBricks.has(obj.userData.id);
+          obj.traverse(child => {
+            if (child.material) {
+              child.material.emissive = new THREE.Color(selected ? 0x223344 : 0x000000);
+            }
+          });
+        }
+      });
+    }
+
+    function clearSelection() {
+      state.selectedBricks.clear();
+      syncSelectionHighlight();
+    }
+
+    function selectBrick(id, additive = false) {
+      if (!additive) state.selectedBricks.clear();
+      state.selectedBricks.add(id);
+      syncSelectionHighlight();
+    }
+
+    function updateGhost(partId = state.selectedPart) {
+      if (state.ghost) {
+        scene.remove(state.ghost);
+      }
+      const part = getPartById(partId);
+      if (!part) return;
+      const ghost = createBrickMesh(part, state.selectedColor);
+      ghost.name = "ghost";
+      ghost.traverse(child => {
+        if (child.material) {
+          child.material = makeMaterial(state.selectedColor, true);
+        }
+      });
+      scene.add(ghost);
+      state.ghost = ghost;
+    }
+
+    updateGhost();
+
+    function placeGhostAt(point) {
+      const part = getPartById(state.selectedPart);
+      const snapped = snapPosition(point, part);
+      const valid = !collisionCheck(part, snapped, state.placementRotation) && studSupportCheck(part, snapped, state.placementRotation);
+      if (state.ghost) {
+        state.ghost.position.copy(snapped);
+        state.ghost.rotation.y = state.placementRotation;
+        state.ghost.traverse(child => {
+          if (child.material) {
+            child.material.opacity = valid ? 0.5 : 0.25;
+            child.material.color.setHex(valid ? state.selectedColor : 0xff6f6f);
+          }
+        });
+      }
+      return { snapped, valid };
+    }
+
+    function pushUndoState() {
+      state.undoStack.push(JSON.stringify(serializeState()));
+      state.redoStack.length = 0;
+    }
+
+    function serializeState() {
+      return {
+        baseplateSize: state.baseplateSize,
+        bricks: state.bricks.map(b => ({
+          id: b.id,
+          partId: b.partId,
+          color: b.color,
+          position: { x: b.position.x, y: b.position.y, z: b.position.z },
+          rotation: b.rotation
+        }))
+      };
+    }
+
+    function loadState(data) {
+      scene.children
+        .filter(obj => obj.name === "brick")
+        .forEach(obj => scene.remove(obj));
+      state.bricks = [];
+      state.selectedBricks.clear();
+      state.baseplateSize = data.baseplateSize || state.baseplateSize;
+      createBaseplate(state.baseplateSize);
+      data.bricks.forEach(b => {
+        const mesh = addBrick(b.partId, b.color, new THREE.Vector3(b.position.x, b.position.y, b.position.z), b.rotation);
+        mesh.userData.id = b.id;
+        const entry = state.bricks.find(entry => entry.id === mesh.userData.id);
+        if (entry) {
+          entry.id = b.id;
+        }
+      });
+      syncSelectionHighlight();
+    }
+
+    function undo() {
+      if (!state.undoStack.length) return;
+      state.redoStack.push(JSON.stringify(serializeState()));
+      const data = JSON.parse(state.undoStack.pop());
+      loadState(data);
+      showToast("Undo");
+    }
+
+    function redo() {
+      if (!state.redoStack.length) return;
+      state.undoStack.push(JSON.stringify(serializeState()));
+      const data = JSON.parse(state.redoStack.pop());
+      loadState(data);
+      showToast("Redo");
+    }
+
+    function ensureGhostVisible() {
+      if (!state.ghost) updateGhost();
+    }
+
+    function handlePlacement(point) {
+      const part = getPartById(state.selectedPart);
+      const { snapped, valid } = placeGhostAt(point);
+      if (!valid) {
+        showToast("Needs stud support / collision free");
+        return;
+      }
+      pushUndoState();
+      const mesh = addBrick(state.selectedPart, state.selectedColor, snapped, state.placementRotation);
+      selectBrick(mesh.userData.id);
+      playClickSound(420);
+      vibrate(12);
+    }
+
+    function recolorSelection(color) {
+      if (!state.selectedBricks.size) return;
+      pushUndoState();
+      state.bricks.forEach(brick => {
+        if (state.selectedBricks.has(brick.id)) {
+          brick.color = color;
+          const mesh = scene.children.find(child => child.userData?.id === brick.id);
+          if (mesh) {
+            mesh.traverse(child => {
+              if (child.material) {
+                child.material.color.setHex(color);
+              }
+            });
+          }
+        }
+      });
+      playClickSound(520);
+    }
+
+    function updateColorSelection() {
+      colorsEl.querySelectorAll(".color-swatch").forEach(swatch => {
+        swatch.classList.toggle("selected", Number(swatch.dataset.hex) === state.selectedColor);
+      });
+    }
+
+    function initUI() {
+      partsLibrary.forEach(part => {
+        const card = document.createElement("div");
+        card.className = "part-card";
+        card.textContent = part.name;
+        card.dataset.part = part.id;
+        if (part.id === state.selectedPart) card.classList.add("active");
+        card.addEventListener("click", () => {
+          state.selectedPart = part.id;
+          paletteEl.querySelectorAll(".part-card").forEach(el => el.classList.toggle("active", el.dataset.part === part.id));
+          updateGhost(part.id);
+        });
+        card.addEventListener("pointerdown", () => {
+          state.dragPalette = true;
+          state.selectedPart = part.id;
+          paletteEl.querySelectorAll(".part-card").forEach(el => el.classList.toggle("active", el.dataset.part === part.id));
+          updateGhost(part.id);
+        });
+        paletteEl.appendChild(card);
+      });
+
+      legoColors.forEach(color => {
+        const swatch = document.createElement("div");
+        swatch.className = "color-swatch";
+        swatch.style.background = `#${color.hex.toString(16).padStart(6, "0")}`;
+        swatch.dataset.hex = color.hex;
+        swatch.title = color.name;
+        swatch.addEventListener("click", () => {
+          state.selectedColor = color.hex;
+          updateGhost();
+          updateColorSelection();
+          if (state.selectedBricks.size) recolorSelection(color.hex);
+        });
+        colorsEl.appendChild(swatch);
+      });
+      updateColorSelection();
+
+      document.getElementById("undoBtn").addEventListener("click", undo);
+      document.getElementById("redoBtn").addEventListener("click", redo);
+      document.getElementById("clearBtn").addEventListener("click", () => {
+        pushUndoState();
+        state.bricks.slice().forEach(brick => removeBrick(brick.id));
+        showToast("Scene cleared");
+      });
+
+      document.getElementById("gridToggle").addEventListener("click", (e) => {
+        state.gridSnap = !state.gridSnap;
+        e.target.classList.toggle("active", state.gridSnap);
+        setGridVisible(state.gridSnap);
+      });
+      document.getElementById("angleToggle").addEventListener("click", (e) => {
+        state.angleSnap = !state.angleSnap;
+        e.target.classList.toggle("active", state.angleSnap);
+      });
+      document.getElementById("gridToggle").classList.toggle("active", state.gridSnap);
+      document.getElementById("angleToggle").classList.toggle("active", state.angleSnap);
+
+      document.getElementById("jsonBtn").addEventListener("click", () => {
+        jsonModal.classList.add("active");
+        jsonText.value = JSON.stringify(serializeState(), null, 2);
+      });
+      document.getElementById("closeJson").addEventListener("click", () => jsonModal.classList.remove("active"));
+      document.getElementById("exportJson").addEventListener("click", () => {
+        jsonText.value = JSON.stringify(serializeState(), null, 2);
+        showToast("Exported JSON");
+      });
+      document.getElementById("importJson").addEventListener("click", () => {
+        try {
+          const data = JSON.parse(jsonText.value);
+          pushUndoState();
+          loadState(data);
+          jsonModal.classList.remove("active");
+          showToast("Imported JSON");
+        } catch (err) {
+          showToast("Invalid JSON");
+        }
+      });
+
+      document.getElementById("saveBtn").addEventListener("click", () => {
+        const name = prompt("Project name?", `Studio ${new Date().toLocaleString()}`);
+        if (!name) return;
+        const payload = serializeState();
+        const thumb = renderer.domElement.toDataURL("image/png");
+        const projects = JSON.parse(localStorage.getItem("lego-projects") || "[]");
+        projects.unshift({ id: crypto.randomUUID(), name, payload, thumb, savedAt: Date.now() });
+        localStorage.setItem("lego-projects", JSON.stringify(projects.slice(0, 12)));
+        refreshProjects();
+        showToast("Project saved");
+      });
+
+      document.getElementById("loadBtn").addEventListener("click", () => {
+        refreshProjects(true);
+      });
+
+      document.querySelectorAll(".baseplate").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.baseplateSize = Number(btn.dataset.size);
+          createBaseplate(state.baseplateSize);
+          showToast(`Baseplate ${state.baseplateSize}x${state.baseplateSize}`);
+        });
+      });
+
+      const templates = createTemplates();
+      templates.forEach(template => {
+        const card = document.createElement("div");
+        card.className = "template-card";
+        card.textContent = template.name;
+        card.addEventListener("click", () => {
+          pushUndoState();
+          loadState(template.payload);
+          showToast(`${template.name} loaded`);
+        });
+        templateGrid.appendChild(card);
+      });
+
+      document.getElementById("panelToggle").addEventListener("click", () => {
+        document.getElementById("panel").classList.toggle("collapsed");
+      });
+    }
+
+    function createTemplates() {
+      const base = { baseplateSize: 32, bricks: [] };
+      const makeBrick = (partId, color, x, y, z, rotation = 0) => ({
+        id: crypto.randomUUID(),
+        partId,
+        color,
+        position: { x, y, z },
+        rotation
+      });
+      const car = JSON.parse(JSON.stringify(base));
+      car.bricks.push(
+        makeBrick("plate-4x8", 0xff2a2a, 0, plateHeight, 0),
+        makeBrick("brick-2x4", 0x111216, -2, plateHeight * 2, -3),
+        makeBrick("brick-2x4", 0x111216, 2, plateHeight * 2, -3),
+        makeBrick("brick-2x4", 0x111216, -2, plateHeight * 2, 3),
+        makeBrick("brick-2x4", 0x111216, 2, plateHeight * 2, 3),
+        makeBrick("brick-2x4", 0xffd82a, 0, plateHeight * 2, 0)
+      );
+      const castle = JSON.parse(JSON.stringify(base));
+      for (let i = -3; i <= 3; i += 3) {
+        for (let j = -3; j <= 3; j += 3) {
+          castle.bricks.push(makeBrick("brick-2x2", 0xcbd5e1, i, plateHeight, j));
+          castle.bricks.push(makeBrick("brick-2x2", 0x4b5563, i, plateHeight * 4, j));
+        }
+      }
+      const spaceship = JSON.parse(JSON.stringify(base));
+      spaceship.bricks.push(
+        makeBrick("plate-2x8", 0x2a6cff, 0, plateHeight, 0),
+        makeBrick("slope-2x4", 0x6cf0ff, 0, plateHeight * 2, -2),
+        makeBrick("brick-2x4", 0x4b5563, 0, plateHeight * 2, 2)
+      );
+      const robot = JSON.parse(JSON.stringify(base));
+      robot.bricks.push(
+        makeBrick("minifig-legs", 0x4b5563, 0, plateHeight, 0),
+        makeBrick("minifig-torso", 0xff5aa5, 0, plateHeight * 4, 0),
+        makeBrick("minifig-head", 0xffd82a, 0, plateHeight * 7, 0)
+      );
+      return [
+        { name: "Speedy Car", payload: car },
+        { name: "Mini Castle", payload: castle },
+        { name: "Starship", payload: spaceship },
+        { name: "Playful Robot", payload: robot }
+      ];
+    }
+
+    function refreshProjects(forceToast = false) {
+      projectList.innerHTML = "";
+      const projects = JSON.parse(localStorage.getItem("lego-projects") || "[]");
+      if (!projects.length && forceToast) showToast("No saved projects");
+      projects.forEach(project => {
+        const item = document.createElement("div");
+        item.className = "project-item";
+        const img = document.createElement("img");
+        img.src = project.thumb;
+        const info = document.createElement("div");
+        info.innerHTML = `<div>${project.name}</div><div style="font-size:10px;color:var(--muted)">${new Date(project.savedAt).toLocaleString()}</div>`;
+        item.appendChild(img);
+        item.appendChild(info);
+        item.addEventListener("click", () => {
+          pushUndoState();
+          loadState(project.payload);
+          showToast("Project loaded");
+        });
+        projectList.appendChild(item);
+      });
+    }
+
+    initUI();
+    refreshProjects();
+
+    function onPointerMove(event) {
+      if (state.selectionBox) {
+        const rect = state.selectionBox;
+        rect.endX = event.clientX;
+        rect.endY = event.clientY;
+        const left = Math.min(rect.startX, rect.endX);
+        const top = Math.min(rect.startY, rect.endY);
+        const width = Math.abs(rect.endX - rect.startX);
+        const height = Math.abs(rect.endY - rect.startY);
+        selectionRectEl.style.left = `${left}px`;
+        selectionRectEl.style.top = `${top}px`;
+        selectionRectEl.style.width = `${width}px`;
+        selectionRectEl.style.height = `${height}px`;
+      }
+      if (state.rightDragging && state.selectedBricks.size) {
+        const delta = event.movementX * 0.01;
+        state.bricks.forEach(brick => {
+          if (state.selectedBricks.has(brick.id)) {
+            brick.rotation += delta;
+            const mesh = scene.children.find(child => child.userData?.id === brick.id);
+            if (mesh) mesh.rotation.y = brick.rotation;
+          }
+        });
+        return;
+      }
+      const point = getPlacementPoint(event);
+      ensureGhostVisible();
+      placeGhostAt(point);
+    }
+
+    function onPointerDown(event) {
+      if (event.button === 2) {
+        state.rightDragging = true;
+        return;
+      }
+      if (event.shiftKey) {
+        state.selectionBox = { startX: event.clientX, startY: event.clientY, endX: event.clientX, endY: event.clientY };
+        selectionRectEl.style.display = "block";
+        return;
+      }
+      updatePointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const hit = intersects.find(i => i.object.parent?.name === "brick");
+      if (hit && hit.object.parent?.userData?.id) {
+        selectBrick(hit.object.parent.userData.id, event.ctrlKey || event.metaKey);
+        return;
+      }
+      const point = getPlacementPoint(event);
+      handlePlacement(point);
+    }
+
+    function onPointerUp(event) {
+      if (event.button === 2) {
+        state.rightDragging = false;
+        if (state.angleSnap && state.selectedBricks.size) {
+          state.bricks.forEach(brick => {
+            if (state.selectedBricks.has(brick.id)) {
+              brick.rotation = Math.round(brick.rotation / (Math.PI / 2)) * (Math.PI / 2);
+              const mesh = scene.children.find(child => child.userData?.id === brick.id);
+              if (mesh) mesh.rotation.y = brick.rotation;
+            }
+          });
+        }
+      }
+      if (state.selectionBox) {
+        const { startX, startY, endX, endY } = state.selectionBox;
+        const left = Math.min(startX, endX);
+        const right = Math.max(startX, endX);
+        const top = Math.min(startY, endY);
+        const bottom = Math.max(startY, endY);
+        state.selectedBricks.clear();
+        scene.children.forEach(child => {
+          if (child.name === "brick") {
+            const vector = child.position.clone().project(camera);
+            const x = (vector.x + 1) / 2 * window.innerWidth;
+            const y = (-vector.y + 1) / 2 * window.innerHeight;
+            if (x >= left && x <= right && y >= top && y <= bottom) {
+              state.selectedBricks.add(child.userData.id);
+            }
+          }
+        });
+        syncSelectionHighlight();
+        selectionRectEl.style.display = "none";
+        state.selectionBox = null;
+      }
+    }
+
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("contextmenu", event => event.preventDefault());
+
+    window.addEventListener("keydown", event => {
+      if (event.target.matches("textarea")) return;
+      if (event.key === "q" || event.key === "Q") {
+        state.placementRotation += state.angleSnap ? Math.PI / 2 : -0.1;
+      }
+      if (event.key === "e" || event.key === "E") {
+        state.placementRotation -= state.angleSnap ? Math.PI / 2 : 0.1;
+      }
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (state.selectedBricks.size) {
+          pushUndoState();
+          [...state.selectedBricks].forEach(id => removeBrick(id));
+          state.selectedBricks.clear();
+          playClickSound(260);
+        }
+      }
+      if (event.key === "c" && (event.ctrlKey || event.metaKey)) {
+        state.clipboard = [...state.selectedBricks].map(id => state.bricks.find(b => b.id === id));
+        showToast("Copied selection");
+      }
+      if (event.key === "v" && (event.ctrlKey || event.metaKey)) {
+        if (state.clipboard) {
+          pushUndoState();
+          state.clipboard.forEach(entry => {
+            addBrick(entry.partId, entry.color, entry.position.clone().add(new THREE.Vector3(1, 0, 1)), entry.rotation);
+          });
+          showToast("Pasted");
+        }
+      }
+      if (event.key === "z" && (event.ctrlKey || event.metaKey)) {
+        if (event.shiftKey) redo();
+        else undo();
+      }
+      if (event.key === "y" && (event.ctrlKey || event.metaKey)) {
+        redo();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function animate() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>
