@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Tekken Arena</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --accent: #ff2d55;
+      --accent-2: #00e5ff;
+      --bg: #0a0a12;
+      --panel: rgba(10, 10, 18, 0.8);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #1c1c2d, var(--bg));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #f5f5f5;
+      padding: 20px;
+      gap: 16px;
+    }
+
+    header {
+      text-align: center;
+      max-width: 840px;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .sub {
+      color: #b8b8d6;
+      font-size: 0.95rem;
+    }
+
+    .arena-wrap {
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+    }
+
+    canvas {
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #1d1f35 0%, #0d0e1d 60%, #07070f 100%);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .hud {
+      width: min(900px, 100%);
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .bar {
+      position: relative;
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+
+    .bar span {
+      position: absolute;
+      inset: 0;
+      transform-origin: left;
+      background: linear-gradient(90deg, var(--accent), #ffa6c1);
+      transition: transform 0.2s ease-out;
+    }
+
+    .bar.player-2 span {
+      background: linear-gradient(90deg, var(--accent-2), #78ffd4);
+      transform-origin: right;
+    }
+
+    .player-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 6px;
+    }
+
+    .center-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .timer {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .round {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      color: #b8b8d6;
+    }
+
+    .controls {
+      width: min(900px, 100%);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      font-size: 0.9rem;
+      color: #d2d2ea;
+    }
+
+    .controls h3 {
+      margin-bottom: 6px;
+      font-size: 0.95rem;
+      color: #fff;
+    }
+
+    .controls kbd {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      margin: 0 2px;
+    }
+
+    .cta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-weight: 600;
+      background: linear-gradient(120deg, var(--accent), #ff9f0a);
+      color: #0b0b14;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    button.secondary {
+      background: linear-gradient(120deg, #6c63ff, #00b8ff);
+      color: #0b0b14;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    .message {
+      font-size: 1rem;
+      text-align: center;
+      color: #f9f3ff;
+      min-height: 24px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mini Tekken Arena</h1>
+    <p class="sub">Two-player arcade sparring. Chain punches, uppercuts, and blocks to win the round.</p>
+  </header>
+
+  <section class="hud">
+    <div>
+      <div class="player-name">Player 1 · Kazuya</div>
+      <div class="bar"><span id="p1Health"></span></div>
+    </div>
+    <div class="center-panel">
+      <div class="timer" id="timer">60</div>
+      <div class="round" id="round">Round 1</div>
+    </div>
+    <div>
+      <div class="player-name">Player 2 · Nina</div>
+      <div class="bar player-2"><span id="p2Health"></span></div>
+    </div>
+  </section>
+
+  <div class="arena-wrap">
+    <canvas id="arena" width="900" height="420" aria-label="Fighting arena"></canvas>
+    <div class="message" id="message"></div>
+    <div class="cta">
+      <button id="restart">Restart Match</button>
+      <button class="secondary" id="togglePause">Pause</button>
+    </div>
+  </div>
+
+  <section class="controls">
+    <div>
+      <h3>Player 1</h3>
+      <p>
+        Move: <kbd>A</kbd> <kbd>D</kbd> · Jump: <kbd>W</kbd> · Crouch: <kbd>S</kbd><br />
+        Punch: <kbd>F</kbd> · Kick: <kbd>G</kbd> · Block: <kbd>R</kbd>
+      </p>
+    </div>
+    <div>
+      <h3>Player 2</h3>
+      <p>
+        Move: <kbd>←</kbd> <kbd>→</kbd> · Jump: <kbd>↑</kbd> · Crouch: <kbd>↓</kbd><br />
+        Punch: <kbd>K</kbd> · Kick: <kbd>L</kbd> · Block: <kbd>I</kbd>
+      </p>
+    </div>
+    <div>
+      <h3>Specials</h3>
+      <p>
+        Land three hits for a combo spark. Uppercuts do bonus damage when the opponent is jumping.
+      </p>
+    </div>
+  </section>
+
+  <script>
+    const canvas = document.getElementById("arena");
+    const ctx = canvas.getContext("2d");
+    const p1HealthEl = document.getElementById("p1Health");
+    const p2HealthEl = document.getElementById("p2Health");
+    const messageEl = document.getElementById("message");
+    const timerEl = document.getElementById("timer");
+    const roundEl = document.getElementById("round");
+    const restartBtn = document.getElementById("restart");
+    const pauseBtn = document.getElementById("togglePause");
+
+    const gravity = 0.6;
+    const groundY = 340;
+    const roundLength = 60;
+
+    const state = {
+      keys: {},
+      paused: false,
+      round: 1,
+      timer: roundLength,
+      matchOver: false,
+      tick: 0,
+    };
+
+    const createFighter = (config) => ({
+      ...config,
+      width: 52,
+      height: 120,
+      velocityX: 0,
+      velocityY: 0,
+      onGround: false,
+      facing: config.facing,
+      health: 100,
+      stamina: 100,
+      cooldown: 0,
+      combo: 0,
+      lastHitTick: 0,
+      blocking: false,
+      crouching: false,
+      jumping: false,
+      hitFlash: 0,
+    });
+
+    const player1 = createFighter({
+      name: "Kazuya",
+      color: "#ff2d55",
+      accent: "#ff9fc0",
+      x: 160,
+      y: groundY,
+      facing: 1,
+      controls: {
+        left: "a",
+        right: "d",
+        jump: "w",
+        crouch: "s",
+        punch: "f",
+        kick: "g",
+        block: "r",
+      },
+    });
+
+    const player2 = createFighter({
+      name: "Nina",
+      color: "#00e5ff",
+      accent: "#7fffe2",
+      x: 690,
+      y: groundY,
+      facing: -1,
+      controls: {
+        left: "ArrowLeft",
+        right: "ArrowRight",
+        jump: "ArrowUp",
+        crouch: "ArrowDown",
+        punch: "k",
+        kick: "l",
+        block: "i",
+      },
+    });
+
+    const fighters = [player1, player2];
+
+    const resetRound = () => {
+      state.timer = roundLength;
+      state.matchOver = false;
+      messageEl.textContent = "";
+      fighters.forEach((fighter, index) => {
+        fighter.x = index === 0 ? 160 : 690;
+        fighter.y = groundY;
+        fighter.velocityX = 0;
+        fighter.velocityY = 0;
+        fighter.health = 100;
+        fighter.cooldown = 0;
+        fighter.combo = 0;
+        fighter.hitFlash = 0;
+        fighter.blocking = false;
+        fighter.crouching = false;
+        fighter.jumping = false;
+        fighter.onGround = false;
+        fighter.facing = index === 0 ? 1 : -1;
+      });
+      updateHealth();
+    };
+
+    const updateHealth = () => {
+      p1HealthEl.style.transform = `scaleX(${player1.health / 100})`;
+      p2HealthEl.style.transform = `scaleX(${player2.health / 100})`;
+    };
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    const handleInput = (fighter) => {
+      const { controls } = fighter;
+      fighter.velocityX = 0;
+      fighter.blocking = state.keys[controls.block];
+      fighter.crouching = state.keys[controls.crouch];
+
+      if (state.keys[controls.left]) {
+        fighter.velocityX = -4.5;
+        fighter.facing = -1;
+      }
+      if (state.keys[controls.right]) {
+        fighter.velocityX = 4.5;
+        fighter.facing = 1;
+      }
+      if (state.keys[controls.jump] && fighter.onGround && !fighter.crouching) {
+        fighter.velocityY = -12;
+        fighter.onGround = false;
+        fighter.jumping = true;
+      }
+    };
+
+    const performAttack = (attacker, defender, type) => {
+      if (attacker.cooldown > 0 || state.matchOver) return;
+
+      const range = type === "punch" ? 70 : 85;
+      const baseDamage = type === "punch" ? 8 : 12;
+      const bonus = defender.jumping && type === "punch" ? 6 : 0;
+      const totalDamage = baseDamage + bonus;
+      attacker.cooldown = type === "punch" ? 18 : 28;
+
+      const distance = Math.abs(attacker.x - defender.x);
+      if (distance < range && Math.abs(attacker.y - defender.y) < 80) {
+        if (defender.blocking) {
+          defender.health -= totalDamage * 0.25;
+        } else {
+          defender.health -= totalDamage;
+          defender.hitFlash = 10;
+          attacker.combo = state.tick - attacker.lastHitTick < 30 ? attacker.combo + 1 : 1;
+          attacker.lastHitTick = state.tick;
+        }
+        defender.health = clamp(defender.health, 0, 100);
+        updateHealth();
+        if (attacker.combo >= 3) {
+          messageEl.textContent = `${attacker.name} combo spark!`;
+          attacker.combo = 0;
+        }
+      }
+    };
+
+    const checkWin = () => {
+      if (state.matchOver) return;
+      if (player1.health <= 0 || player2.health <= 0 || state.timer <= 0) {
+        state.matchOver = true;
+        let result = "Draw";
+        if (player1.health > player2.health) result = `${player1.name} wins!`;
+        if (player2.health > player1.health) result = `${player2.name} wins!`;
+        messageEl.textContent = `Round ${state.round} - ${result}`;
+      }
+    };
+
+    const update = () => {
+      if (state.paused) return;
+      state.tick += 1;
+      if (state.tick % 60 === 0 && !state.matchOver) {
+        state.timer -= 1;
+        timerEl.textContent = state.timer;
+        if (state.timer <= 10) {
+          timerEl.style.color = "#ff9f0a";
+        }
+      }
+
+      fighters.forEach((fighter) => {
+        handleInput(fighter);
+        fighter.x += fighter.velocityX;
+        fighter.y += fighter.velocityY;
+        fighter.velocityY += gravity;
+
+        if (fighter.y >= groundY) {
+          fighter.y = groundY;
+          fighter.velocityY = 0;
+          fighter.onGround = true;
+          fighter.jumping = false;
+        }
+
+        fighter.x = clamp(fighter.x, 60, canvas.width - 60);
+        if (fighter.cooldown > 0) fighter.cooldown -= 1;
+        if (fighter.hitFlash > 0) fighter.hitFlash -= 1;
+      });
+
+      const dx = player2.x - player1.x;
+      if (Math.abs(dx) < 80) {
+        player1.x -= dx * 0.02;
+        player2.x += dx * 0.02;
+      }
+
+      checkWin();
+    };
+
+    const drawFighter = (fighter) => {
+      const bodyColor = fighter.hitFlash > 0 ? "#fff" : fighter.color;
+      ctx.fillStyle = bodyColor;
+      ctx.fillRect(fighter.x - fighter.width / 2, fighter.y - fighter.height, fighter.width, fighter.height);
+
+      ctx.fillStyle = fighter.accent;
+      ctx.fillRect(fighter.x - fighter.width / 2, fighter.y - fighter.height - 14, fighter.width, 10);
+
+      if (fighter.blocking) {
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(fighter.x, fighter.y - fighter.height / 2, 44, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      if (fighter.crouching) {
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.fillRect(fighter.x - fighter.width / 2, fighter.y - 30, fighter.width, 30);
+      }
+    };
+
+    const drawBackground = () => {
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      for (let i = 0; i < 12; i += 1) {
+        ctx.fillRect(i * 80 + (state.tick % 80), groundY + 20, 40, 6);
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.07)";
+      ctx.fillRect(0, groundY + 26, canvas.width, 2);
+    };
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "rgba(7, 8, 20, 0.8)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawBackground();
+      drawFighter(player1);
+      drawFighter(player2);
+
+      if (state.matchOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#fff";
+        ctx.font = "32px 'Segoe UI'";
+        ctx.textAlign = "center";
+        ctx.fillText(messageEl.textContent, canvas.width / 2, canvas.height / 2);
+      }
+    };
+
+    const gameLoop = () => {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    };
+
+    const resetMatch = () => {
+      state.round = 1;
+      roundEl.textContent = `Round ${state.round}`;
+      timerEl.textContent = roundLength;
+      timerEl.style.color = "#fff";
+      resetRound();
+    };
+
+    window.addEventListener("keydown", (event) => {
+      state.keys[event.key] = true;
+      if (event.key === player1.controls.punch) performAttack(player1, player2, "punch");
+      if (event.key === player1.controls.kick) performAttack(player1, player2, "kick");
+      if (event.key === player2.controls.punch) performAttack(player2, player1, "punch");
+      if (event.key === player2.controls.kick) performAttack(player2, player1, "kick");
+    });
+
+    window.addEventListener("keyup", (event) => {
+      state.keys[event.key] = false;
+    });
+
+    restartBtn.addEventListener("click", () => {
+      resetMatch();
+    });
+
+    pauseBtn.addEventListener("click", () => {
+      state.paused = !state.paused;
+      pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+      messageEl.textContent = state.paused ? "Paused" : "";
+    });
+
+    setInterval(() => {
+      if (state.matchOver) {
+        state.round += 1;
+        roundEl.textContent = `Round ${state.round}`;
+        resetRound();
+      }
+    }, 2000);
+
+    resetMatch();
+    gameLoop();
+  </script>
+</body>
+</html>
